@@ -1,0 +1,21 @@
+{
+  "name": "Ieee1609Dot2js",
+  "version": "1.0.0",
+  "repository": "github:fillabs/ieee1609dot2js",
+  "description": "ASN.1 OER decoder for IEEE 1609.2",
+  "main": "./Ieee1609Dot2js.mjs",
+  "module": "./Ieee1609Dot2js.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "asnjs": "fillabs/asnjs",
+    "esm": "^3.2.25"
+  },
+  "author": "",
+  "license": "MIT",
+  "exports": {
+    "default": "./Ieee1609Dot2js.mjs",
+    "require": "./Ieee1609Dot2js.js"
+  }
+}
