@@ -4,10 +4,16 @@
          Uint16, OpenType
        } from "asnjs";
 
-import * as crypto from 'crypto';
-import { isArray, inspect } from "util";
+var wc;
+if (typeof process === 'object'){
+    wc = (await import('crypto')).webcrypto; 
+}else{
+  wc = crypto;
+}
 
-const _emptyStringHash = {
+var inspect_custom = Symbol.for('nodejs.util.inspect_custom')
+
+var _emptyStringHash = {
     sha256: new Uint8Array([
         0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
         0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
@@ -18,8 +24,10 @@ const _emptyStringHash = {
         0x27, 0x4e, 0xde, 0xbf, 0xe7, 0x6f, 0x65, 0xfb, 0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b
     ])
 };
+_emptyStringHash["SHA-256"] = _emptyStringHash.sha256;
+_emptyStringHash["SHA-384"] = _emptyStringHash.sha384;
 
-const _der_prefix = {
+var _der_prefix = {
     prime256v1: new Uint8Array([
         0x30, 0x39, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A,
         0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x22, 0x00]),
@@ -30,9 +38,10 @@ const _der_prefix = {
         0X30, 0X4A, 0X30, 0X14, 0X06, 0X07, 0X2A, 0X86, 0X48, 0XCE, 0X3D, 0X02, 0X01, 0X06, 0X09, 0X2B,
         0X24, 0X03, 0X03, 0X02, 0X08, 0X01, 0X01, 0X0B, 0X03, 0X32, 0X00])
 };
+_der_prefix["P-256"] = _der_prefix.prime256v1;
 
 class HashAlgorithm extends Enumerated([
-    "sha256", 'EXTENSION', "sha384"
+    "SHA-256", Enumerated.extension, "SHA-384"
 ]) {
     static from_oer(dc) {
         return super.from_oer(dc);
@@ -44,15 +53,14 @@ class HashAlgorithm extends Enumerated([
 
 class OctetString16 extends OctetString(16)
 {
-    [inspect.custom]() {
+    [inspect_custom]() {
         return "\n  " + Buffer.from(this).toString('hex');
     }
-
 }
 
 class OctetString32 extends OctetString(32)
 {
-    [inspect.custom]() {
+    [inspect_custom]() {
         let b = Buffer.from(this);
         return "\n  " + b.toString('hex', 0,  16) +
                "\n  " + b.toString('hex', 16, 32);
@@ -61,7 +69,7 @@ class OctetString32 extends OctetString(32)
 
 class OctetString48 extends OctetString(48)
 {
-    [inspect.custom]() {
+    [inspect_custom]() {
         let b = Buffer.from(this);
         return "\n  " + b.toString('hex', 0,  16) +
                "\n  " + b.toString('hex', 16, 32) +
@@ -74,21 +82,21 @@ class Opaque extends OctetString()
     static from_oer(dc) {
         return super.from_oer(dc);
     }
-    [inspect.custom]() {
+    [inspect_custom]() {
         return "\n  " + Buffer.from(this).toString('hex');
     }
 }
 
 class HashedId8 extends OctetString(8)
 {
-    [inspect.custom]() {
+    [inspect_custom]() {
         return Buffer.from(this).toString('hex');
     }
 }
 
 class HashedId3 extends OctetString(3)
 {
-    [inspect.custom]() {
+    [inspect_custom]() {
         return Buffer.from(this).toString('hex');
     }
 }
@@ -259,7 +267,7 @@ class GeographicRegion extends Choice([
                     type: Uint16
                 }, {
                     name: "countryAndRegions",
-                    sequence: [
+                    type: Sequence([
                         {
                             name: "countryOnly",
                             type: Uint16
@@ -267,7 +275,7 @@ class GeographicRegion extends Choice([
                             name: "regions",
                             type: SequenceOf(Uint8)
                         }
-                    ]
+                    ])
                 }, {
                     name: "countryAndSubregions",
                     type: Sequence([
@@ -380,11 +388,11 @@ class PsidGroupPermissions extends Sequence([
         ])
     }, {
         name: "minChainLength",
-        type: Integer,
+        type: Integer(),
         default: 1
     }, {
         name: "chainLengthRange",
-        type: Integer,
+        type: Integer(),
         default: 0
     }, {
         name: "eeType",
@@ -530,8 +538,9 @@ class PublicEncryptionKey extends Sequence([
 //    }
 }
 
-const _hashAlgorithms = ["sha256", "sha256", "sha384"];
-const _verificationAlgorithms = ["prime256v1", "brainpoolP256r1", "brainpoolP384r1"];
+const _hashAlgorithms = ["SHA-256", "SHA-256", "SHA-384"];
+//const _verificationAlgorithms = ["prime256v1", "brainpoolP256r1", "brainpoolP384r1"];
+const _verificationAlgorithms = ["P-256", "B-256", "B-384"];
 
 class PublicVerificationKey extends Choice([
     {
@@ -651,7 +660,7 @@ class EcdsaP256Signature extends Sequence([
     }
 ]) {
     get ieee_p1363() {
-        return new Uint8Array(Buffer.concat([this.rSig.x, this.sSig]));
+        return Uint8Array.from([...this.rSig.x, ...this.sSig]);
     }
     static from_oer(dc) {
         let start = dc.index;
@@ -672,11 +681,9 @@ class EcdsaP384Signature extends Sequence([
     }
 ]) {
     get ieee_p1363() {
-        let a = new Uint8Array(this.rSig.x.length + this.sSig.length);
-        a.set(this.rSig.x);
-        a.set(this.sSig, this.rSig.x.length);
-        return a;
+        return Uint8Array.from([...this.rSig.x, ...this.sSig]);
     }
+
     static from_oer(dc) {
         let start = dc.index;
         let x = super.from_oer(dc);
@@ -738,37 +745,43 @@ class Ieee1609Dot2Certificate extends Sequence([
         return super.from_oer(dc, { keep_buffer: true });
     }
 
-    get hash() {
+    async _calculateHash() {
+        return wc.subtle.digest(this.verificationHashAlgorithm, this.oer);
+    }
+
+    async hash() {
         if (this._hash === undefined) {
-            this._calculateHash();
+            this._hash = new Uint8Array( await this._calculateHash());
         }
         return this._hash;
     }
-    get digest() {
-        let h = this.hash;
-        return h.slice(h.length - 8);
+
+    async digest() {
+        let h = await this.hash();
+        let l = h.length;
+        return new HashedId8(h.slice(l-8));
     }
 
-    get issuer_digest() {
+    async issuer_digest() {
         if (this.issuer.sha256AndDigest !== undefined) {
             return this.issuer.sha256AndDigest;
         } else if (this.issuer.sha384AndDigest !== undefined) {
             return this.issuer.sha384AndDigest;
         } else if (this.issuer.self !== undefined) {
-            return this.digest;
+            return this.digest();
         }
         return null;
     }
-    get verificationKey() {
+    
+    async verificationKey() {
         if (this.toBeSigned.verifyKeyIndicator.verificationKey) {
-            return crypto.createPublicKey({
-                key: this.toBeSigned.verifyKeyIndicator.verificationKey.to_der(),
-                format: "der",
-                type: "spki"
-            });
+            let der = this.toBeSigned.verifyKeyIndicator.verificationKey.to_der();
+            let va = this.toBeSigned.verifyKeyIndicator.verificationAlgorithm();
+            return wc.subtle.importKey('spki', der ,
+                                             { name: 'ECDSA', namedCurve: va},
+                                             true, ['verify']);
         }
-    }
-        
+    }        
 
     get verificationHashAlgorithm() {
         return this.toBeSigned.verifyKeyIndicator.hashAlgorithm();
@@ -778,17 +791,9 @@ class Ieee1609Dot2Certificate extends Sequence([
         return this.toBeSigned.verifyKeyIndicator.verificationAlgorithm();
     }
 
-    _calculateHash() {
-        var hash;
-        var data = this.oer;
-        hash = crypto.createHash(this.verificationHashAlgorithm);
-        hash.update(data);
-        return this._hash = hash.digest();
-    }
-
-    verify(signer) {
+    async verify(signer) {
         // check that signer is correct
-        let issuer_digest = this.issuer_digest;
+        let issuer_digest = await this.issuer_digest();
         if (typeof signer === "function") {
             signer = signer(issuer_digest);
         }
@@ -799,40 +804,27 @@ class Ieee1609Dot2Certificate extends Sequence([
                 return false;
             }
         }
-        if (0 !== signer.digest.compare(issuer_digest)) {
+        if(!issuer_digest.equal(await signer.digest()))
             return false;
-        }
 
         // calculate tbsHash
         let hashAlg = signer.verificationHashAlgorithm;
-        let hash = crypto.createHash(hashAlg);
-        hash.update(this.toBeSigned.oer);
-        let d = hash.digest();
-        console.log("TBS [" + this.toBeSigned.oer.length + "]: " + Buffer.from(this.toBeSigned.oer).toString('hex'));
-        console.log("TBS hash: " + d.toString('hex'));
-        let dd = new Uint8Array(d.length * 2);
-        dd.set(d);
-        if (this.issuer.self) {
-            dd.set(_emptyStringHash[hashAlg], d.length);
-        } else {
-            let hash = crypto.createHash(hashAlg);
-            hash.update(signer.oer);
-            dd.set(hash.digest(), d.length);
+        let tbsHash = await wc.subtle.digest(hashAlg, this.toBeSigned.oer);
+    
+//        console.log("TBS [" + this.toBeSigned.oer.length + "]: " + this.toBeSigned.oer.toString('hex'));
+//        console.log("TBS hash: " + tbsHash.toString('hex'));
+        let signerDigest = (this.issuer.self) ? _emptyStringHash[hashAlg] : await signer.hash();
+        let verificationKey = await signer.verificationKey();
+        let dd = Uint8Array.from([...new Uint8Array(tbsHash), ...signerDigest]);
+        let passed;
+        try {
+            let s = this.signature.ieee_p1363;
+            passed = wc.subtle.verify( { name:'ECDSA', hash: hashAlg },verificationKey, s, dd);
+        }catch(e){
+            console.log(e);
+            passed = false;
         }
-
-        let V = crypto.createVerify(hashAlg);
-        V.update(dd);
-
-        let k = {
-            dsaEncoding: 'ieee-p1363',
-            key: signer.toBeSigned.verifyKeyIndicator.verificationKey.to_der(),
-            format: "der",
-            type: "spki"
-        };
-
-        let s = this.signature.ieee_p1363;
-
-        return V.verify(k, s);
+        return passed;
     }
 }
 
@@ -1105,53 +1097,33 @@ class SignedData extends Sequence([
     }
 
     get tbsHash() {
-
-        var H = crypto.createHash(this.hashId.algorithm);
-        if (H) {
-            H.update(this.tbsData.oer);
-            return H.digest();
-        }
-        return null;
+        return ws.subtle.digest(this.hashId.algorithm, this.tbsData.oer);
     }
 
-    verify(signer) {
+    async verify(signer) {
         if (signer === undefined) {
-            if (isArray(this.signer.certificate) && this.signer.certificate.length > 0)
+            if (Array.isArray(this.signer.certificate) && this.signer.certificate.length > 0)
                 signer = this.signer.certificate[0];
             if (signer === undefined)
                 return false;
         }
-        let tbsHash = this.tbsHash;
+        let tbsHash = await this.tbsHash();
         if (tbsHash) {
-            console.log("TBS Hash: " + inspect(tbsHash, {
-                depth: null, customInspect: true, maxArrayLength: null, showHidden: false
-            }));
-            console.log("Signer Hash: " + inspect(signer.hash, {
-                depth: null, customInspect: true, maxArrayLength: null, showHidden: false
-            }));
-            let d = new Uint8Array(tbsHash.length + signer.hash.length);
+//            console.log("TBS Hash: " + inspect(tbsHash, {
+//                depth: null, customInspect: true, maxArrayLength: null, showHidden: false
+//            }));
+            let signer_hash = await signer.hash();
+
+//            console.log("Signer Hash: " + inspect(signer_hash, {
+//                depth: null, customInspect: true, maxArrayLength: null, showHidden: false
+//            }));
+            let d = new Uint8Array(tbsHash.length + signer_hash.length);
             d.set(tbsHash);
             d.set(signer.hash, tbsHash.length);
-/*
-            let H = crypto.createHash(this.hashId.algorithm).update(d);
-            d = H.digest()
-            console.log("Signing Hash: " + inspect(d, {
-                depth: null, customInspect: true, maxArrayLength: null, showHidden: false
-            }));
-*/
 
-            let k = {
-                dsaEncoding: 'ieee-p1363',
-                key: signer.toBeSigned.verifyKeyIndicator.verificationKey.to_der(),
-                format: "der",
-                type: "spki"
-            };
-
-            let s = this.signature.ieee_p1363;
-
-            let ret = crypto.verify(this.hashId.algorithm, d, k, s)
-
-            return ret;
+            let vk = await signer.verificationKey();
+            return await wc.subtle.verify( {name:'ECDSA', hash:this.hashId.algorithm},
+                              vk, this.signature.ieee_p1363, d);
         }
     }
 }
