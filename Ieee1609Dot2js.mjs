@@ -1,7 +1,7 @@
 ﻿import { Enumerated, Integer, Sequence, 
          SequenceOf, Choice, OctetString,
          IA5String, BitString, Uint8,
-         Uint16, OpenType
+         Uint16, OpenType, DataCursor
        } from "asnjs";
 
 var wc;
@@ -40,6 +40,9 @@ var _der_prefix = {
 };
 _der_prefix["P-256"] = _der_prefix.prime256v1;
 
+/** @class 
+ * @property {'SHA-256'|'SHA-384'} algorithm
+ */
 class HashAlgorithm extends Enumerated([
     "SHA-256", Enumerated.extension, "SHA-384"
 ]) {
@@ -51,55 +54,38 @@ class HashAlgorithm extends Enumerated([
     }
 }
 
-class OctetString16 extends OctetString(16)
-{
-    [inspect_custom]() {
-        return "\n  " + Buffer.from(this).toString('hex');
-    }
-}
+class CrlSeries extends Uint16{}
 
-class OctetString32 extends OctetString(32)
-{
-    [inspect_custom]() {
-        let b = Buffer.from(this);
-        return "\n  " + b.toString('hex', 0,  16) +
-               "\n  " + b.toString('hex', 16, 32);
-    }
-}
-
-class OctetString48 extends OctetString(48)
-{
-    [inspect_custom]() {
-        let b = Buffer.from(this);
-        return "\n  " + b.toString('hex', 0,  16) +
-               "\n  " + b.toString('hex', 16, 32) +
-               "\n  " + b.toString('hex', 32, 48);
-    }
-}
+class OctetString16 extends OctetString(16) {}
+class OctetString32 extends OctetString(32) {}
+class OctetString48 extends OctetString(48) {}
 
 class Opaque extends OctetString()
 {
     static from_oer(dc) {
         return super.from_oer(dc);
     }
-    [inspect_custom]() {
-        return "\n  " + Buffer.from(this).toString('hex');
-    }
 }
 
-class HashedId8 extends OctetString(8)
-{
-    [inspect_custom]() {
-        return Buffer.from(this).toString('hex');
-    }
-}
+class HashedId8 extends OctetString(8) {}
 
-class HashedId3 extends OctetString(3)
-{
-    [inspect_custom]() {
-        return Buffer.from(this).toString('hex');
-    }
-}
+class HashedId3 extends OctetString(3) {}
+
+/** 
+ * @class LaId
+ *
+ * @brief This structure contains a LA Identifier for use in the algorithms
+ * specified in 5.1.3.4.
+ */
+ class LaId extends OctetString(2) {}
+  
+ /** 
+  * @class LinkageSeed
+  *
+  * @brief This structure contains a linkage seed value for use in the
+  * algorithms specified in 5.1.3.4.
+  */
+class LinkageSeed extends OctetString(16) {}
 
 const epoch = new Date("2004-01-01 00:00:00").getTime();
 class Time64 extends Date {
@@ -117,7 +103,11 @@ class Time32 extends Date {
         return new this(t * 1000 + epoch);
     }
 }
-
+/**
+ * @property {HashedId8} sha256AndDigest
+ * @property {HashAlgorithm} self
+ * @property {HashedId8} sha256AndDigest
+ */
 class IssuerIdentifier extends Choice([
     {
         name: "sha256AndDigest",
@@ -137,6 +127,12 @@ class IssuerIdentifier extends Choice([
 //    }
 }
 
+/**
+ * @property {{iCert:Uint16, linkage_value: OctetString, group_linkage_value:{jValue:OctetString,value:OctetString}}} linkageData
+ * @property {IA5String} name
+ * @property {Opaque}    binaryId
+ * @property {boolean}   none
+ */
 class CertificateId extends Choice([
     {
         name: "linkageData",
@@ -149,7 +145,7 @@ class CertificateId extends Choice([
                 type: OctetString(9)
             }, {
                 name: "group_linkage_value",
-                sequence: [
+                type: Sequence([
                     {
                         name: "jValue",
                         type: OctetString(4)
@@ -157,7 +153,7 @@ class CertificateId extends Choice([
                         name: "value",
                         type: OctetString(9)
                     }
-                ]
+                ])
             }
         ])
     }, {
@@ -173,31 +169,47 @@ class CertificateId extends Choice([
     }
 ]) { }
 
+/**
+ *  @property {Uint16} milliseconds
+ *  @property {Uint16} seconds
+ *  @property {Uint16} minutes 
+ *  @property {Uint16} microseconds
+ *  @property {Uint16} hours
+ *  @property {Uint16} sixtyHours
+ *  @property {Uint16} years
+*/ 
+class Duration extends Choice([
+    { name: "microseconds", type: Uint16 },
+    { name: "milliseconds", type: Uint16 },
+    { name: "seconds",      type: Uint16 },
+    { name: "minutes",      type: Uint16 },
+    { name: "hours",        type: Uint16 },
+    { name: "sixtyHours",   type: Uint16 },
+    { name: "years",        type: Uint16 }
+]){}
+
+/**
+ * @property {Time32} start
+ * @property {Duration} duration
+ */
 class ValidityPeriod extends Sequence([
-    {
-        name: "start",
-        type: Time32
-    }, {
-        name: "duration",
-        type: Choice([
-            { name: "microseconds", type: Uint16 },
-            { name: "milliseconds", type: Uint16 },
-            { name: "seconds", type: Uint16 },
-            { name: "minutes", type: Uint16 },
-            { name: "hours", type: Uint16 },
-            { name: "sixtyHours", type: Uint16 },
-            { name: "years", type: Uint16 }
-        ])
-    }
+    { name: "start",    type: Time32},
+    { name: "duration", type: Duration}
 ]) { }
 
-class Latitude extends Integer(-900000000, 900000001)
+/**
+ * @implements {Number}
+ */
+ class Latitude extends Integer(-900000000, 900000001)
 {
 //    static from_oer(dc) {
 //        return super.from_oer(dc);
 //    }
 }
 
+/**
+ * @implements {Number}
+ */
 class Longitude extends Integer(-1799999999, 1800000001)
 {
 //    static from_oer(dc) {
@@ -205,6 +217,10 @@ class Longitude extends Integer(-1799999999, 1800000001)
 //    }
 }
 
+/**
+ * @property {Latitude} latitude
+ * @property {Longitude} longitude
+ */
 class TwoDLocation extends Sequence([
     {
         name: "latitude",
@@ -216,7 +232,12 @@ class TwoDLocation extends Sequence([
 ])
 { }
 
-class ThreeDLocation extends Sequence([
+/**
+ * @property {Latitude} latitude
+ * @property {Longitude} longitude
+ * @property {Uint16} elevation
+ */
+ class ThreeDLocation extends Sequence([
     {
         name: "latitude",
         type: Latitude
@@ -230,6 +251,14 @@ class ThreeDLocation extends Sequence([
 ])
 { }
 
+/**
+ * @property {{center:TwoDLocation, radius:Uint16}} circularRegion
+ * @property {{northWest:TwoDLocation, southEast:TwoDLocation}[]} rectangularRegion
+ * @property {TwoDLocation[]} polygonalRegion
+ * @property {{countryOnly:Uint16,
+ *             countryAndRegions:{countryOnly:Uint16, regions:Uint8[]},
+ *             countryAndSubregions:{countryOnly:Uint16, regionAndSubregions:{region:Uint8, subregions:Uint16[]}[]}}} identifiedRegion
+ */
 class GeographicRegion extends Choice([
     {
         name: "circularRegion",
@@ -308,6 +337,10 @@ class GeographicRegion extends Choice([
 
 ]) { }
 
+/**
+ * @property {Opaque} opaque
+ * @property {Opaque} bitmapSsp
+ */
 class ServiceSpecificPermissions extends Choice([
     {
         name: "opaque",
@@ -320,9 +353,15 @@ class ServiceSpecificPermissions extends Choice([
     }
 ]) { }
 
+/**
+ * @implements {Number}
+ */
 class Psid extends Integer(0)
 { }
-
+/**
+ * @property {number} psid
+ * @property {ServiceSpecificPermissions} ssp
+ */
 class PsidSsp extends Sequence([
     {
         name: "psid",
@@ -338,12 +377,29 @@ class PsidSsp extends Sequence([
 //    }
 }
 
+/**
+ * @implements {boolean[]} 
+ */
 class EndEntityType extends BitString(8)
 { }
 
 EndEntityType.app   = [true, false, false, false, false, false, false, false];
 EndEntityType.enrol = [false, true, false, false, false, false, false, false];
 
+/**
+ * @property {{explicit:{
+ *                psid:Psid,
+ *                sspRange:{
+ *                    opaque:string[],
+ *                    all:boolean,
+ *                    bitmapSspRange:{
+ *                        sspValue:Opaque,
+ *                        sspBitmask:Opaque}}}[],
+ *             all:boolean}} subjectPermissions
+ * @property {number} minChainLength
+ * @property {number} chainLengthRange
+ * @property {EndEntityType.app|EndEntityType.enrol} EndEntityType
+ */
 class PsidGroupPermissions extends Sequence([
     {
         name: "subjectPermissions",
@@ -449,6 +505,15 @@ var EccCurvePoint = function (fields, options) {
     return C;
 };
 
+/**
+ * @class
+ * @property {OctetString} x
+ * @property {OctetString} y
+ * @property {OctetString} x_only
+ * @property {OctetString} compressed_y_0
+ * @property {OctetString} compressed_y_1
+ * @property {{x:OctetString,y:OctetString}} uncompressed
+ */
 class EccP256CurvePoint extends EccCurvePoint([
     {
         name: _pointTypes[0],
@@ -478,7 +543,21 @@ class EccP256CurvePoint extends EccCurvePoint([
         return super.from_oer(dc);
     }
 }
+/**
+ * @function to_der
+ * @memberof EccP256CurvePoint
+ * @returns {Uint8Array}
+ */
 
+/**
+ * @class
+ * @property {OctetString} x
+ * @property {OctetString} y
+ * @property {OctetString} x_only
+ * @property {OctetString} compressed_y_0
+ * @property {OctetString} compressed_y_1
+ * @property {{x:OctetString,y:OctetString}} uncompressed
+ */
 class EccP384CurvePoint extends EccCurvePoint([
     {
         name: _pointTypes[0],
@@ -514,6 +593,10 @@ class SymmetricEncryptionKey extends Enumerated([
     Enumerated.extension
 ]) { }
 
+/**
+ * @property {'aes128Ccm'} supportedSymmAlg
+ * @property {{eciesNistP256:EccP256CurvePoint, eciesBrainpoolP256r1: EccP256CurvePoint}} publicKey
+ */
 class PublicEncryptionKey extends Sequence([
     {
         name: "supportedSymmAlg",
@@ -538,10 +621,18 @@ class PublicEncryptionKey extends Sequence([
 //    }
 }
 
+/** @typedef {('SHA-256'|'SHA-384')} HashAlgorithmValue */
 const _hashAlgorithms = ["SHA-256", "SHA-256", "SHA-384"];
 //const _verificationAlgorithms = ["prime256v1", "brainpoolP256r1", "brainpoolP384r1"];
+/** @typedef {('P-256'|'B-256'|'P-384')} VerificationAlgorithmValue */
 const _verificationAlgorithms = ["P-256", "B-256", "B-384"];
 
+/**
+ * @class
+ * @property {EccP256CurvePoint} ecdsaNistP256
+ * @property {EccP256CurvePoint} ecdsaBrainpoolP256r1
+ * @property {EccP384CurvePoint} ecdsaBrainpoolP384r1
+ */
 class PublicVerificationKey extends Choice([
     {
         name: "ecdsaNistP256",
@@ -556,24 +647,27 @@ class PublicVerificationKey extends Choice([
         type: EccP384CurvePoint
     }
 ]) {
+    /** @returns {HashAlgorithmValue} */
     hashAlgorithm() {
         return _hashAlgorithms[this.tagIndex];
     }
+    /** @returns {VerificationAlgorithmValue} */
     verificationAlgorithm() {
         return _verificationAlgorithms[this.tagIndex];
     }
+    /** @returns {Uint8Array} */
     to_der() {
         return this[this.tagName].to_der(this.verificationAlgorithm());
     }
-
-
-//    static from_oer(dc) {
-//        return super.from_oer(dc, { keep_buffer: true });
-//    }
 }
 
 class SubjectAssurance extends Uint8 { }
 
+/**
+ * @class
+ * @property {PublicVerificationKey} verificationKey
+ * @property {EccP256CurvePoint} reconstructionValue
+ */
 class VerificationKeyIndicator extends Choice([
     {
         name: "verificationKey",
@@ -585,17 +679,30 @@ class VerificationKeyIndicator extends Choice([
         extension:true
     }
 ]) {
+    /** @returns {HashAlgorithmValue} */
     hashAlgorithm() {
         return this.verificationKey ? this.verificationKey.hashAlgorithm() : _hashAlgorithms[0];
     }
+    /** @returns {VerificationAlgorithmValue} */
     verificationAlgorithm() {
         return this.verificationKey ? this.verificationKey.verificationAlgorithm() : _verificationAlgorithms[0];
     }
-//    static from_oer(dc) {
-//        return super.from_oer(dc, { keep_buffer: true });
-//    }
 }
 
+/**
+ * @property {CertificateId} id
+ * @property {cracaId} OctetString
+ * @property {crlSeries} number
+ * @property {ValidityPeriod} validityPeriod
+ * @property {?GeographicRegion} region
+ * @property {?SubjectAssurance} assuranceLevel
+ * @property {?PsidSsp[]} appPermissions
+ * @property {?PsidGroupPermissions[]} certIssuePermissions
+ * @property {?PsidGroupPermissions[]} certRequestPermissions
+ * @property {?boolean} canRequestRollover
+ * @property {?PublicEncryptionKey}encryptionKey
+ * @property {VerificationKeyIndicator} verifyKeyIndicator
+ */
 class ToBeSignedCertificate extends Sequence([
     {
         name: "id",
@@ -649,7 +756,10 @@ class ToBeSignedCertificate extends Sequence([
     }
 }
 
-
+/**
+ * @property {EccP256CurvePoint} rSig
+ * @property {OctetString} sSig
+ */
 class EcdsaP256Signature extends Sequence([
     {
         name: "rSig",
@@ -659,6 +769,7 @@ class EcdsaP256Signature extends Sequence([
         type: OctetString32
     }
 ]) {
+    /** @returns {Uint8Array} returns the IEEE1363 signature representation: Concatenation of r and s */
     get ieee_p1363() {
         return Uint8Array.from([...this.rSig.x, ...this.sSig]);
     }
@@ -671,7 +782,11 @@ class EcdsaP256Signature extends Sequence([
     }
 }
 
-class EcdsaP384Signature extends Sequence([
+/**
+ * @property {EccP384CurvePoint} rSig
+ * @property {OctetString} sSig
+ */
+ class EcdsaP384Signature extends Sequence([
     {
         name: "rSig",
         type: EccP384CurvePoint
@@ -680,6 +795,7 @@ class EcdsaP384Signature extends Sequence([
         type: OctetString48
     }
 ]) {
+    /** @returns {Uint8Array} returns the IEEE1363 signature representation: Concatenation of r and s */
     get ieee_p1363() {
         return Uint8Array.from([...this.rSig.x, ...this.sSig]);
     }
@@ -693,7 +809,11 @@ class EcdsaP384Signature extends Sequence([
     }
 }
 
-
+/**
+ * @property {EcdsaP256Signature} ecdsaNistP256Signature
+ * @property {EcdsaP256Signature} ecdsaBrainpoolP256r1Signature
+ * @property {EcdsaP384Signature} ecdsaBrainpoolP384r1Signature
+ */
 class Signature extends Choice([
     {
         name: "ecdsaNistP256Signature",
@@ -711,24 +831,40 @@ class Signature extends Choice([
     static from_oer(dc) {
         return super.from_oer(dc);
     }
+    /**@returns {HashAlgorithmValue} */
     hashAlgorithm() {
         return _hashAlgorithms[this.tagIndex];
     }
+    /**@returns {VerificationAlgorithmValue} */
     verificationAlgorithm() {
         return _verificationAlgorithms[this.tagIndex];
     }
+    /**@returns {Uint8Array} */
     get ieee_p1363() {
         return this[this.tagName].ieee_p1363;
     }
 }
 
-class Ieee1609Dot2Certificate extends Sequence([
+class CertificateType extends Enumerated([
+    "explicit",
+    "implicit",
+    Enumerated.extension
+]){}
+
+/**
+ * @property {number} version
+ * @property {('explicit'|'implicit')} type
+ * @property {IssuerIdentifier} issuer
+ * @property {ToBeSignedCertificate} toBeSigned
+ * @property {Signature}signature
+ */
+export class Ieee1609Dot2Certificate extends Sequence([
     {
         name: "version",
         type: Uint8
     }, {
         name: "type",
-        type: Enumerated(["explicit", "implicit", Enumerated.extension])
+        type: CertificateType
     }, {
         name: "issuer",
         type: IssuerIdentifier
@@ -741,6 +877,11 @@ class Ieee1609Dot2Certificate extends Sequence([
         type: Signature
     }
 ]) {
+    /**
+     * 
+     * @param {DataCursor} dc 
+     * @returns {Ieee1609Dot2Certificate}
+     */
     static from_oer(dc) {
         return super.from_oer(dc, { keep_buffer: true });
     }
@@ -749,20 +890,32 @@ class Ieee1609Dot2Certificate extends Sequence([
         return wc.subtle.digest(this.verificationHashAlgorithm, this.oer);
     }
 
-    async hash() {
+    /**
+     * @async
+     * @returns {Uint8Array}
+     */
+     async hash() {
         if (this._hash === undefined) {
             this._hash = new Uint8Array( await this._calculateHash());
         }
         return this._hash;
     }
 
-    async digest() {
+    /**
+     * @async
+     * @returns {HashedId8}
+     */
+     async digest() {
         let h = await this.hash();
         let l = h.length;
         return new HashedId8(h.slice(l-8));
     }
 
-    async issuer_digest() {
+    /**
+     * @async
+     * @returns {HashedId8}
+     */
+     async issuer_digest() {
         if (this.issuer.sha256AndDigest !== undefined) {
             return this.issuer.sha256AndDigest;
         } else if (this.issuer.sha384AndDigest !== undefined) {
@@ -773,7 +926,11 @@ class Ieee1609Dot2Certificate extends Sequence([
         return null;
     }
     
-    async verificationKey() {
+    /**
+     * @async
+     * @returns {Promise<CryptoKey>} 
+     */
+     async verificationKey() {
         if (this.toBeSigned.verifyKeyIndicator.verificationKey) {
             let der = this.toBeSigned.verifyKeyIndicator.verificationKey.to_der();
             let va = this.toBeSigned.verifyKeyIndicator.verificationAlgorithm();
@@ -783,14 +940,19 @@ class Ieee1609Dot2Certificate extends Sequence([
         }
     }        
 
+    /** @returns {HashAlgorithmValue} */
     get verificationHashAlgorithm() {
         return this.toBeSigned.verifyKeyIndicator.hashAlgorithm();
     }
 
+    /** @returns {VerificationAlgorithmValue} */
     get verificationAlgorithm() {
         return this.toBeSigned.verifyKeyIndicator.verificationAlgorithm();
     }
 
+    /** 
+     * @async
+     * @returns {Promise<boolean>} */
     async verify(signer) {
         // check that signer is correct
         let issuer_digest = await this.issuer_digest();
@@ -827,7 +989,11 @@ class Ieee1609Dot2Certificate extends Sequence([
         return passed;
     }
 }
-
+/**
+ * @property {HashedId8} digest
+ * @property {Ieee1609Dot2Certificate[]} certificate
+ * @property {boolean}self
+ */
 class SignerIdentifier extends Choice([
     {
         name: "digest",
@@ -841,10 +1007,19 @@ class SignerIdentifier extends Choice([
         extension: true
     }
 ]) {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {SignerIdentifier}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 }
+/** 
+ * @property {EccP256CurvePoint} v
+ * @property {OctetString} c
+ * @property {OctetString} t
+ */
 
 class EciesP256EncryptedKey extends Sequence([
     {
@@ -859,6 +1034,10 @@ class EciesP256EncryptedKey extends Sequence([
     }
 ]) { }
 
+/**
+ * @property {HashedId8} recipientId
+ * @property {{eciesNistP256:EciesP256EncryptedKey,eciesBrainpoolP256r1:EciesP256EncryptedKey}}encKey
+ */
 class PKRecipientInfo extends Sequence([
     {
         name: "recipientId",
@@ -879,6 +1058,10 @@ class PKRecipientInfo extends Sequence([
     }
 ]) { }
 
+/**
+ * @property {OctetString}nonce
+ * @property {Opaque} ccmCiphertext
+ */ 
 class AesCcmCiphertext extends Sequence([
     {
         name: "nonce",
@@ -889,10 +1072,18 @@ class AesCcmCiphertext extends Sequence([
     }
 ])
 {
+    /**
+     * 
+     * @param {DataCursor} dc 
+     * @returns {AesCcmCiphertext}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 }
+/**
+ * @property {AesCcmCiphertext} aes128ccm
+ */
 class SymmetricCiphertext extends Choice([
     {
         name: "aes128ccm",
@@ -901,6 +1092,11 @@ class SymmetricCiphertext extends Choice([
         extension: true
     }
 ]) {
+    /**
+     * 
+     * @param {DataCursor} dc 
+     * @returns {SymmetricCiphertext}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
@@ -910,7 +1106,7 @@ var SignedDataPayload_Fields = [
     {
         name: "data",
         optional: true,
-        type: null
+        type: null // to be changed to Ieee1609Dot2Data at the end of the file
     }, {
         name: "extDataHash",
         optional: true,
@@ -926,14 +1122,26 @@ var SignedDataPayload_Fields = [
         extension: true
     }
 ];
-
+/**
+ * @property {Ieee1609Dot2Data} data
+ * @property {{sha256HashedData:OctetString}} extDataHash
+ */
 class SignedDataPayload extends Sequence(SignedDataPayload_Fields)
 {
+    /**
+     * @static
+     * @param {DataCursor} dc
+     * @returns {SignedDataPayload}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
-
 }
+
+/**
+ * @property {HashedId8} issuerId
+ * @property {Time32} lastKnownUpdate
+ */
 
 class EtsiTs102941CrlRequest extends Sequence([
     {
@@ -946,7 +1154,10 @@ class EtsiTs102941CrlRequest extends Sequence([
     }
 ])
 { }
-
+/**
+ * @property {HashedId8} issuerId
+ * @property {Uint8} lastKnownCtlSequence
+ */
 class EtsiTs102941CtlRequest extends Sequence([
     {
         name: "issuerId",
@@ -959,6 +1170,10 @@ class EtsiTs102941CtlRequest extends Sequence([
 ])
 { }
 
+/**
+ * @property {Uint8} id
+ * @property {(EtsiTs102941CrlRequest|EtsiTs102941CtlRequest)} content
+ */
 class EtsiOriginatingHeaderInfoExtension extends Sequence([
     {
         name: "id",
@@ -974,6 +1189,20 @@ class EtsiOriginatingHeaderInfoExtension extends Sequence([
 ])
 { }
 
+/**
+ * @property {Psid} psid
+ * @property {?Time64} generationTime
+ * @property {?Time64} expiryTime
+ * @property {?ThreeDLocation} generationLocation
+ * @property {?HashedId3} p2pcdLearningRequest
+ * @property {?{cracaId:HashedId3,crlSeries:Uint16}[]} missingCrlIdentifier
+ * @property {?{public:PublicEncryptionKey, symmetric:SymmetricEncryptionKey}}encryptionKey
+ * @property {?HashedId3[]}inlineP2pcdRequest
+ * @property {Ieee1609Dot2Certificate}[requestedCertificate]
+ * @property {Uint8} [pduFunctionalType]
+ * @property {{contributorId:Uint8, extns:EtsiOriginatingHeaderInfoExtension[]}[]}[contributedExtensions]
+ * 
+ */
 class HeaderInfo extends Sequence([
     {
         name: "psid",
@@ -1056,12 +1285,20 @@ class HeaderInfo extends Sequence([
     }
 ])
 {
+    /**
+     * 
+     * @param {DataCursor} dc 
+     * @param {*} options 
+     * @returns {HeaderInfo}
+     */
     static from_oer(dc, options) {
         return super.from_oer(dc, options);
     }
 }
-
-
+/**
+ * @property {SignedDataPayload} payload
+ * @property {HeaderInfo}headerInfo
+ */
 class ToBeSignedData extends Sequence([
     {
         name: "payload",
@@ -1072,11 +1309,20 @@ class ToBeSignedData extends Sequence([
     }
 ])
 {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {ToBeSignedData}
+     */
     static from_oer(dc) {
         return super.from_oer(dc, { keep_buffer: true });
     }
 }
-    
+    /**
+     * @property {HashAlgorithmValue} hashId
+     * @property {ToBeSignedData} tbsData
+     * @property {SignerIdentifier} signer
+     * @property {Signature} signature
+     */
 class SignedData extends Sequence([
     {
         name: "hashId",
@@ -1092,14 +1338,27 @@ class SignedData extends Sequence([
         type: Signature
     }
 ]) {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {SignedData}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 
-    get tbsHash() {
+    /**
+     * @async
+     * @returns {Promise<ArrayBuffer>}
+     */
+    async tbsHash() {
         return ws.subtle.digest(this.hashId.algorithm, this.tbsData.oer);
     }
 
+    /**
+     * 
+     * @param {(Ieee1609Dot2Certificate|SignerIdentifier)} signer 
+     * @returns {Promise<boolean>}
+     */
     async verify(signer) {
         if (signer === undefined) {
             if (Array.isArray(this.signer.certificate) && this.signer.certificate.length > 0)
@@ -1127,7 +1386,13 @@ class SignedData extends Sequence([
         }
     }
 }
-
+/**
+ * @property {HashedId8} [pskRecipInfo]
+ * @property {{recipientId:HashedId8,encKey:SymmetricCiphertext}}[symmRecipInfo]
+ * @property {PKRecipientInfo} [certRecipInfo]
+ * @property {PKRecipientInfo} [signedDataRecipInfo]
+ * @property {PKRecipientInfo}[rekRecipInfo]
+ */
 class RecipientInfo extends Choice([
     {
         name: "pskRecipInfo",
@@ -1155,11 +1420,19 @@ class RecipientInfo extends Choice([
     }
 ])
 {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {RecipientInfo}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 }
 
+/**
+ * @property {RecipientInfo[]}recipients
+ * @property {SymmetricCiphertext}ciphertext
+ */
 class EncryptedData extends Sequence([
     {
         name: "recipients",
@@ -1170,11 +1443,21 @@ class EncryptedData extends Sequence([
     }
 ])
 {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {EncryptedData}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 }
 
+/**
+ * @property {Opaque} unsecuredData
+ * @property {SignedData} signedData
+ * @property {EncryptedData} encryptedData
+ * @property {OctetString} signedCertificateRequest
+ */
 class Ieee1609Dot2Content extends Choice([
     {
         name: "unsecuredData",
@@ -1187,17 +1470,25 @@ class Ieee1609Dot2Content extends Choice([
         type: EncryptedData
     }, {
         name: "signedCertificateRequest",
-        type: OctetString()
+        type: Opaque
     }, {
         extention: true
     }
 ])
 {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {Ieee1609Dot2Content}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
 }
 
+/**
+ * @property {Uint8} protocolVersion
+ * @property {Ieee1609Dot2Content} content
+ */
 class Ieee1609Dot2Data extends Sequence([
     {
         name: "protocolVersion",
@@ -1207,22 +1498,33 @@ class Ieee1609Dot2Data extends Sequence([
         type: Ieee1609Dot2Content
     }
 ]) {
+    /**
+     * @param {DataCursor} dc 
+     * @returns {Ieee1609Dot2Data}
+     */
     static from_oer(dc) {
         return super.from_oer(dc);
     }
-    verify(signer) {
+
+    /**
+     * @async
+     * @param {DataCursor} signer 
+     * @returns {Promise<boolean>}
+     */
+    async verify(signer) {
         if (this.content && this.content.signedData) {
             return this.content.signedData.verify(signer);
         }
-        return false;
+        return Promise.resolve(true);
     }
 }
 
 SignedDataPayload_Fields[0].type = Ieee1609Dot2Data;
 
 export {
-    HashAlgorithm, Opaque, Time32, Time64, HashedId8, HashedId3, CertificateId, SubjectAssurance,
-    GeographicRegion, ValidityPeriod, PsidGroupPermissions, PsidSsp,
-    PublicEncryptionKey, PublicVerificationKey, Signature,
+    CrlSeries, HashAlgorithm, Opaque, Time32, Time64, HashedId8, HashedId3, CertificateId, SubjectAssurance,
+    LaId, LinkageSeed, GeographicRegion, ValidityPeriod, PsidGroupPermissions, PsidSsp,
+    PublicEncryptionKey, PublicVerificationKey, Signature, IssuerIdentifier, 
+    ToBeSignedCertificate, CertificateType,
     Ieee1609Dot2Certificate, Ieee1609Dot2Data
 };
