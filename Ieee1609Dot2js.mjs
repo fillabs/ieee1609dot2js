@@ -1,7 +1,8 @@
 ﻿import { Enumerated, Integer, Sequence, 
          SequenceOf, Choice, OctetString,
          IA5String, BitString, Uint8,
-         Uint16, OpenType, DataCursor
+         Uint16, OpenType, Null, ObjectIdentifier,
+         DataCursor
        } from "asnjs";
 
 var wc;
@@ -22,10 +23,15 @@ var _emptyStringHash = {
         0x38, 0xb0, 0x60, 0xa7, 0x51, 0xac, 0x96, 0x38, 0x4c, 0xd9, 0x32, 0x7e, 0xb1, 0xb1, 0xe3, 0x6a,
         0x21, 0xfd, 0xb7, 0x11, 0x14, 0xbe, 0x07, 0x43, 0x4c, 0x0c, 0xc7, 0xbf, 0x63, 0xf6, 0xe1, 0xda,
         0x27, 0x4e, 0xde, 0xbf, 0xe7, 0x6f, 0x65, 0xfb, 0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b
+    ]),
+    sm3: new Uint8Array([
+        0x1A, 0xB2, 0x1D, 0x83, 0x55, 0xCF, 0xA1, 0x7F, 0x8E, 0x61, 0x19, 0x48, 0x31, 0xE8, 0x1A, 0x8F,
+        0x22, 0xBE, 0xC8, 0xC7, 0x28, 0xFE, 0xFB, 0x74, 0x7E, 0xD0, 0x35, 0xEB, 0x50, 0x82, 0xAA, 0x2B
     ])
 };
 _emptyStringHash["SHA-256"] = _emptyStringHash.sha256;
 _emptyStringHash["SHA-384"] = _emptyStringHash.sha384;
+_emptyStringHash["SM3"]     = _emptyStringHash.sm3;
 
 var _der_prefix = {
     prime256v1: new Uint8Array([
@@ -41,10 +47,10 @@ var _der_prefix = {
 _der_prefix["P-256"] = _der_prefix.prime256v1;
 
 /** @class 
- * @property {'SHA-256'|'SHA-384'} algorithm
+ * @property {'SHA-256'|'SHA-384'|'SM3'} algorithm
  */
 class HashAlgorithm extends Enumerated([
-    "SHA-256", Enumerated.extension, "SHA-384"
+    "SHA-256", Enumerated.extension, "SHA-384", "SM3"
 ]) {
     static from_oer(dc) {
         return super.from_oer(dc);
@@ -458,9 +464,9 @@ class PsidGroupPermissions extends Sequence([
         default: EndEntityType.app
     }
 ]) {
-//    static from_oer(dc) {
-//        return super.from_oer(dc);
-//    }
+    static from_oer(dc) {
+        return super.from_oer(dc);
+    }
 }
 
 const _pointTypes = ["x_only", "reserved", "compressed_y_0", "compressed_y_1", "uncompressed"];
@@ -592,7 +598,8 @@ class EccP384CurvePoint extends EccCurvePoint([
 
 class SymmetricEncryptionKey extends Enumerated([
     "aes128Ccm",
-    Enumerated.extension
+    Enumerated.extension,
+    "sm4Ccm"
 ]) { }
 
 /**
@@ -614,6 +621,9 @@ class PublicEncryptionKey extends Sequence([
                 type: EccP256CurvePoint
             }, {
                 extension: true
+            }, {
+                name: "ecencSm2",
+                type: EccP256CurvePoint
             }
         ])
     }
@@ -623,11 +633,11 @@ class PublicEncryptionKey extends Sequence([
 //    }
 }
 
-/** @typedef {('SHA-256'|'SHA-384')} HashAlgorithmValue */
-const _hashAlgorithms = ["SHA-256", "SHA-256", "SHA-384"];
+/** @typedef {('SHA-256'|'SHA-384'|'SM2')} HashAlgorithmValue */
+const _hashAlgorithms = ["SHA-256", "SHA-256", "SHA-384", "SHA-384", "SM2"];
 //const _verificationAlgorithms = ["prime256v1", "brainpoolP256r1", "brainpoolP384r1"];
-/** @typedef {('P-256'|'B-256'|'P-384')} VerificationAlgorithmValue */
-const _verificationAlgorithms = ["P-256", "B-256", "B-384"];
+/** @typedef {('P-256'|'B-256'|'P-384'|'B-384'|'SM3')} VerificationAlgorithmValue */
+const _verificationAlgorithms = ["P-256", "B-256", "B-384", "P-384", "SM3"];
 
 /**
  * @class
@@ -647,6 +657,12 @@ class PublicVerificationKey extends Choice([
     }, {
         name: "ecdsaBrainpoolP384r1",
         type: EccP384CurvePoint
+    }, {
+        name: "ecdsaNistP384",
+        type: EccP384CurvePoint
+    }, {
+        name: "ecsigSm2",
+        type: EccP256CurvePoint
     }
 ]) {
     /** @returns {HashAlgorithmValue} */
@@ -691,6 +707,36 @@ class VerificationKeyIndicator extends Choice([
     }
 }
 
+class AppExtension extends Sequence([
+    {
+        name: "id",
+        type: Uint8
+    }, {
+        name: "content",
+        type: OpenType({
+          1: ObjectIdentifier
+        }, "id")
+    }
+]) {}
+
+class CertIssueExtension extends Sequence([
+    { name: "id",          type: Uint8 },
+    { name: "permissions", type: Choice([
+        { name: "specific", type: OpenType({1: Null}, "id")},
+        { name: "all", type: Null }
+      ])
+    }
+]) {}
+
+class CertRequestExtension extends Sequence([
+    { name: "id",          type: Uint8 },
+    { name: "permissions", type: Choice([
+        { name: "content", type: OpenType({1: Null}, "id")},
+        { name: "all", type: Null }
+      ])
+    }
+]) {}
+
 /**
  * @property {CertificateId} id
  * @property {cracaId} OctetString
@@ -704,6 +750,10 @@ class VerificationKeyIndicator extends Choice([
  * @property {?boolean} canRequestRollover
  * @property {?PublicEncryptionKey}encryptionKey
  * @property {VerificationKeyIndicator} verifyKeyIndicator
+ * @property {?iBitString} flags
+ * @property {?AppExtension[]} appExtensions
+ * @property {?CertIssueExtension[]} certIssueExtensions
+ * @property {?CertRequestExtension[]} certRequestExtension 
  */
 class ToBeSignedCertificate extends Sequence([
     {
@@ -750,6 +800,18 @@ class ToBeSignedCertificate extends Sequence([
         type: VerificationKeyIndicator
     }, {
         extension: true
+    }, {
+        name: "flags",
+        type: BitString(8)
+    }, {
+        name: "appExtensions",
+        type: SequenceOf(AppExtension)
+    }, {
+        name: "certIssueExtensions",
+        type: SequenceOf(CertIssueExtension)
+    }, {
+        name: "certRequestExtension",
+        type: SequenceOf(CertRequestExtension)
     }
 ]) {
     static from_oer(dc) {
@@ -815,6 +877,8 @@ class EcdsaP256Signature extends Sequence([
  * @property {EcdsaP256Signature} ecdsaNistP256Signature
  * @property {EcdsaP256Signature} ecdsaBrainpoolP256r1Signature
  * @property {EcdsaP384Signature} ecdsaBrainpoolP384r1Signature
+ * @property {EcdsaP384Signature} ecdsaNistP384Signature
+ * @property {EcdsaP256Signature} sm2Signature
  */
 class Signature extends Choice([
     {
@@ -828,6 +892,12 @@ class Signature extends Choice([
     }, {
         name: "ecdsaBrainpoolP384r1Signature",
         type: EcdsaP384Signature
+    }, {
+        name: "ecdsaNistP384Signature",
+        type: EcdsaP384Signature
+    }, {
+        name: "sm2Signature",
+        type: EcdsaP256Signature
     }
 ]) {
     static from_oer(dc) {
