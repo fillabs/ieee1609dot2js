@@ -8,7 +8,7 @@ var wc;
 if (typeof process === 'object'){
     wc = (await import('crypto')).webcrypto; 
 }else{
-  wc = crypto;
+    wc = crypto;
 }
 
 var inspect_custom = Symbol.for('nodejs.util.inspect_custom')
@@ -70,6 +70,8 @@ class Opaque extends OctetString()
 class HashedId8 extends OctetString(8) {}
 
 class HashedId3 extends OctetString(3) {}
+
+class IValue extends Uint16 {}
 
 /** 
  * @class LaId
@@ -858,7 +860,7 @@ class CertificateType extends Enumerated([
  * @property {ToBeSignedCertificate} toBeSigned
  * @property {Signature}signature
  */
-export class Ieee1609Dot2Certificate extends Sequence([
+class Ieee1609Dot2Certificate extends Sequence([
     {
         name: "version",
         type: Uint8
@@ -1473,6 +1475,9 @@ class Ieee1609Dot2Content extends Choice([
         type: Opaque
     }, {
         extention: true
+    }, {
+        name: "signedX509CertificateRequest",
+        type: Opaque
     }
 ])
 {
@@ -1522,9 +1527,10 @@ class Ieee1609Dot2Data extends Sequence([
 SignedDataPayload_Fields[0].type = Ieee1609Dot2Data;
 
 export {
-    CrlSeries, HashAlgorithm, Opaque, Time32, Time64, HashedId8, HashedId3, CertificateId, SubjectAssurance,
-    LaId, LinkageSeed, GeographicRegion, ValidityPeriod, PsidGroupPermissions, PsidSsp,
-    PublicEncryptionKey, PublicVerificationKey, Signature, IssuerIdentifier, 
+    CrlSeries, HashAlgorithm, Opaque, Time32, Time64, TwoDLocation, ThreeDLocation, HashedId8, HashedId3, CertificateId, SubjectAssurance,
+    LaId, LinkageSeed, GeographicRegion, ValidityPeriod, PsidGroupPermissions, Psid, PsidSsp, IValue,
+    EccP256CurvePoint, EccP384CurvePoint, 
+    PublicEncryptionKey, PublicVerificationKey, Signature, IssuerIdentifier, SignerIdentifier,
     ToBeSignedCertificate, CertificateType,
     Ieee1609Dot2Certificate, Ieee1609Dot2Data
 };
