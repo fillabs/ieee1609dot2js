@@ -103,12 +103,38 @@ class Time64 extends Date {
         r.time64 = t;
         return r;
     }
+    to_oer(dc) {
+        let v = BigInt(this.getTime() - epoch) * 1000n;
+        dc.setUint64(v);
+        return dc;
+    }
+    static to_oer(dc, v){
+        if( v instanceof Date)
+            v = BigInt(v.getTime(v) - epoch);
+        else
+            v = BigInt.parseInt(v) - BigInt(epoch);
+        dc.setUint64(v * 1000n);
+        return dc;
+    }
 }
 
 class Time32 extends Date {
     static from_oer(dc) {
         var t = dc.getUint32();
         return new this(t * 1000 + epoch);
+    }
+    to_oer(dc) {
+        let v = (this.getTime() - epoch) / 1000;
+        dc.setUint32(v);
+        return dc;
+    }
+    static to_oer(dc, v){
+        if( v instanceof Date)
+            v = v.getTime(v);
+        else
+            v = Number.parseInt(v);
+        dc.setUint32((v - epoch)/1000);
+        return dc;
     }
 }
 /**
@@ -171,7 +197,8 @@ class CertificateId extends Choice([
         name: "binaryId",
         type: Opaque
     }, {
-        name: "none"
+        name: "none",
+        type: Null
     }, {
         extension: true
     }
