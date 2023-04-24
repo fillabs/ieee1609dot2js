@@ -12,8 +12,6 @@ if (typeof process === 'object'){
     wc = crypto;
 }
 
-var inspect_custom = Symbol.for('nodejs.util.inspect_custom')
-
 var _emptyStringHash = {
     sha256: new Uint8Array([
         0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
@@ -97,6 +95,11 @@ class LinkageSeed extends OctetString(16) {}
 
 const epoch = new Date("2004-01-01 00:00:00").getTime();
 class Time64 extends Date {
+    static create(v) {
+        var r = new this(epoch + Number(t / 1000n));
+        r.time64 = v;
+        return r;
+    }
     static from_oer(dc) {
         var t = dc.getUint64();
         var r = new this(epoch + Number(t / 1000n));
@@ -119,6 +122,10 @@ class Time64 extends Date {
 }
 
 class Time32 extends Date {
+    static create(v){
+        var r = new this(epoch + Number(t / 1000n));
+        return new this(v);
+    }
     static from_oer(dc) {
         var t = dc.getUint32();
         return new this(t * 1000 + epoch);
@@ -145,7 +152,7 @@ class Time32 extends Date {
 class IssuerIdentifier extends Choice([
     {
         name: "sha256AndDigest",
-        type: HashedId8
+        type: HashedId8,
     }, {
         name: "self",
         type: HashAlgorithm
@@ -155,11 +162,7 @@ class IssuerIdentifier extends Choice([
         name: "sha384AndDigest",
         type: HashedId8
     }
-]) {
-//    static from_oer(dc) {
-//        return super.from_oer(dc);
-//    }
-}
+]) { }
 
 /**
  * @property {{iCert:Uint16, linkage_value: OctetString, group_linkage_value:{jValue:OctetString,value:OctetString}}} linkageData
@@ -198,7 +201,8 @@ class CertificateId extends Choice([
         type: Opaque
     }, {
         name: "none",
-        type: Null
+        type: Null,
+        init: null // use this by default
     }, {
         extension: true
     }
@@ -220,16 +224,16 @@ class Duration extends Choice([
     { name: "minutes",      type: Uint16 },
     { name: "hours",        type: Uint16 },
     { name: "sixtyHours",   type: Uint16 },
-    { name: "years",        type: Uint16 }
+    { name: "years",        type: Uint16, init: 1 } // 1 year by default
 ]){}
 
 /**
  * @property {Time32} start
  * @property {Duration} duration
  */
-class ValidityPeriod extends Sequence([
-    { name: "start",    type: Time32},
-    { name: "duration", type: Duration}
+class ValidityPeriod extends Sequence ([
+    { name: "start",    type: Time32, init: ()=>{Date.now()}},
+    { name: "duration", type: Duration }
 ]) { }
 
 /**
@@ -305,7 +309,8 @@ class GeographicRegion extends Choice([
                 name: "radius",
                 type: Uint16
             }
-        ])
+        ]),
+        init: null // use this by default
     }, {
         name: "rectangularRegion",
         type: SequenceOf(
@@ -995,7 +1000,7 @@ class Ieee1609Dot2Certificate extends Sequence([
      */
      async hash() {
         if (this._hash === undefined) {
-            this._hash = new Uint8Array( await this._calculateHash());
+            this._hash = OctetString.create(await this._calculateHash());
         }
         return this._hash;
     }
